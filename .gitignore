@@ -130,6 +130,7 @@ dmypy.json
 
 # Configuration files (personal settings, may contain API keys)
 config.yaml
+client_config.yaml
 
 # Claude Code local settings
 .claude/settings.local.json
