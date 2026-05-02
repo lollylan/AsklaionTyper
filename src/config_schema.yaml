@@ -101,12 +101,21 @@ recording_options:
   recording_mode:
     value: continuous
     type: str
-    description: "The recording mode to use. Options include continuous (auto-restart recording after pause in speech until activation key is pressed again), voice_activity_detection (stop recording after pause in speech), press_to_toggle (stop recording when activation key is pressed again), hold_to_record (stop recording when activation key is released)."
+    description: "The recording mode to use. Options include continuous (auto-restart recording after pause in speech until activation key is pressed again), voice_activity_detection (stop recording after pause in speech), press_to_toggle (stop recording when activation key is pressed again), hold_to_record (stop recording when activation key is released), hold_or_double_tap (hold the key to dictate while pressed, OR double-tap to start a continuous session that ends on the next press)."
     options:
       - continuous
       - voice_activity_detection
       - press_to_toggle
       - hold_to_record
+      - hold_or_double_tap
+  hold_threshold_ms:
+    value: 350
+    type: int
+    description: "Only used when recording_mode is hold_or_double_tap. If the activation key is held for at least this many milliseconds and then released, the recording stops immediately (hold-to-talk)."
+  double_tap_window_ms:
+    value: 450
+    type: int
+    description: "Only used when recording_mode is hold_or_double_tap. Window in milliseconds after a short tap during which a second tap activates continuous (toggle) recording. If the window passes without a second tap, the short tap is treated like a regular hold and transcribed."
   sound_device:
     value: null
     type: str

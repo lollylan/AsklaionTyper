@@ -1,3 +1,4 @@
+import math
 import time
 import traceback
 import numpy as np
@@ -31,6 +32,7 @@ class ResultThread(QThread):
 
     statusSignal = pyqtSignal(str)
     resultSignal = pyqtSignal(str)
+    audioLevelSignal = pyqtSignal(float)  # 0.0 ... 1.0, log-scaled
 
     def __init__(self, local_model=None):
         """
@@ -153,6 +155,15 @@ class ResultThread(QThread):
                 frame = np.array(list(audio_buffer), dtype=np.int16)
                 audio_buffer.clear()
                 recording.extend(frame)
+
+                # Emit visual level (log-scaled RMS, clipped to ~[-60, -10] dBFS)
+                rms = float(np.sqrt(np.mean((frame.astype(np.float32) / 32768.0) ** 2)))
+                if rms > 0:
+                    db = 20.0 * math.log10(max(rms, 1e-6))
+                    level = (db + 55.0) / 45.0  # map [-55, -10] dBFS -> [0, 1]
+                    self.audioLevelSignal.emit(max(0.0, min(1.0, level)))
+                else:
+                    self.audioLevelSignal.emit(0.0)
 
                 # Avoid trying to detect voice in initial frames
                 if initial_frames_to_skip > 0:

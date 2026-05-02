@@ -3,7 +3,7 @@ import sys
 import time
 from audioplayer import AudioPlayer
 from pynput.keyboard import Controller
-from PyQt5.QtCore import QObject, QProcess
+from PyQt5.QtCore import QObject, QProcess, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QMessageBox
 
@@ -17,7 +17,7 @@ from input_simulation import InputSimulator
 from utils import ConfigManager
 
 
-class WhisperWriterApp(QObject):
+class AsklaionTyperApp(QObject):
     def __init__(self):
         """
         Initialize the application, opening settings window if no configuration file is found.
@@ -55,6 +55,13 @@ class WhisperWriterApp(QObject):
         self.result_thread = None
         self.stopping_continuous = False
 
+        # State for hold_or_double_tap mode
+        self._hd_state = 'idle'  # 'idle' | 'hold' | 'tap_armed' | 'toggle'
+        self._hd_press_time = 0.0
+        self._hd_tap_timer = QTimer(self)
+        self._hd_tap_timer.setSingleShot(True)
+        self._hd_tap_timer.timeout.connect(self._on_double_tap_window_expired)
+
         self.main_window = MainWindow()
         self.main_window.openSettings.connect(self.settings_window.show)
         self.main_window.startListening.connect(self.key_listener.start)
@@ -64,7 +71,20 @@ class WhisperWriterApp(QObject):
             self.status_window = StatusWindow()
 
         self.create_tray_icon()
-        self.main_window.show()
+
+        # If a config exists, the user has already done the initial setup —
+        # start the key listener silently and live in the system tray.
+        # Otherwise, show the main window so the user can press "Start".
+        if ConfigManager.config_file_exists():
+            self.key_listener.start()
+            self.tray_icon.showMessage(
+                'AsklaionTyper',
+                'Läuft im Hintergrund. Strg+Shift+Leertaste zum Diktieren.',
+                QSystemTrayIcon.Information,
+                3000,
+            )
+        else:
+            self.main_window.show()
 
     def create_tray_icon(self):
         """
@@ -74,7 +94,7 @@ class WhisperWriterApp(QObject):
 
         tray_menu = QMenu()
 
-        show_action = QAction('WhisperWriter Main Menu', self.app)
+        show_action = QAction('AsklaionTyper Main Menu', self.app)
         show_action.triggered.connect(self.main_window.show)
         tray_menu.addAction(show_action)
 
@@ -124,8 +144,13 @@ class WhisperWriterApp(QObject):
         """
         Called when the activation key combination is pressed.
         """
+        recording_mode = ConfigManager.get_config_value('recording_options', 'recording_mode')
+
+        if recording_mode == 'hold_or_double_tap':
+            self._on_activation_hybrid()
+            return
+
         if self.result_thread and self.result_thread.isRunning():
-            recording_mode = ConfigManager.get_config_value('recording_options', 'recording_mode')
             if recording_mode == 'press_to_toggle':
                 self.result_thread.stop_recording()
             elif recording_mode == 'continuous':
@@ -139,9 +164,70 @@ class WhisperWriterApp(QObject):
         """
         Called when the activation key combination is released.
         """
-        if ConfigManager.get_config_value('recording_options', 'recording_mode') == 'hold_to_record':
+        recording_mode = ConfigManager.get_config_value('recording_options', 'recording_mode')
+
+        if recording_mode == 'hold_or_double_tap':
+            self._on_deactivation_hybrid()
+            return
+
+        if recording_mode == 'hold_to_record':
             if self.result_thread and self.result_thread.isRunning():
                 self.result_thread.stop_recording()
+
+    # ------------------------------------------------------------------
+    # hold_or_double_tap state machine
+    # ------------------------------------------------------------------
+    # State diagram:
+    #   idle      --press--> hold (recording starts)
+    #   hold      --release after >= hold_threshold--> idle (transcribe)
+    #   hold      --release before  hold_threshold-->  tap_armed (timer running)
+    #   tap_armed --press within window--> toggle
+    #   tap_armed --timer expires--> idle (transcribe; treat short tap as hold)
+    #   toggle    --press--> idle (transcribe)
+    #   toggle    --release--> ignored
+
+    def _on_activation_hybrid(self):
+        if self._hd_state == 'idle':
+            self._hd_press_time = time.monotonic()
+            self._hd_state = 'hold'
+            self.start_result_thread()
+        elif self._hd_state == 'tap_armed':
+            self._hd_tap_timer.stop()
+            self._hd_state = 'toggle'
+        elif self._hd_state == 'toggle':
+            self._hd_state = 'idle'
+            if self.result_thread and self.result_thread.isRunning():
+                self.result_thread.stop_recording()
+        # When state is 'hold' a press without a release shouldn't happen on
+        # a sane key listener; treat as no-op.
+
+    def _on_deactivation_hybrid(self):
+        if self._hd_state != 'hold':
+            return  # only the first release after a press matters
+
+        held_for = time.monotonic() - self._hd_press_time
+        hold_threshold_s = (ConfigManager.get_config_value(
+            'recording_options', 'hold_threshold_ms') or 350) / 1000.0
+
+        if held_for >= hold_threshold_s:
+            # Genuine hold: stop and transcribe immediately.
+            self._hd_state = 'idle'
+            if self.result_thread and self.result_thread.isRunning():
+                self.result_thread.stop_recording()
+        else:
+            # Short tap: keep recording, wait for a possible second tap.
+            self._hd_state = 'tap_armed'
+            window_ms = ConfigManager.get_config_value(
+                'recording_options', 'double_tap_window_ms') or 450
+            self._hd_tap_timer.start(int(window_ms))
+
+    def _on_double_tap_window_expired(self):
+        if self._hd_state != 'tap_armed':
+            return
+        # No second tap arrived. Treat as a short hold and transcribe.
+        self._hd_state = 'idle'
+        if self.result_thread and self.result_thread.isRunning():
+            self.result_thread.stop_recording()
 
     def start_result_thread(self):
         """
@@ -153,6 +239,7 @@ class WhisperWriterApp(QObject):
         self.result_thread = ResultThread(self.local_model)
         if not ConfigManager.get_config_value('misc', 'hide_status_window'):
             self.result_thread.statusSignal.connect(self.status_window.updateStatus)
+            self.result_thread.audioLevelSignal.connect(self.status_window.setAudioLevel)
             self.status_window.closeSignal.connect(self.stop_result_thread)
         self.result_thread.resultSignal.connect(self.on_transcription_complete)
         self.result_thread.start()
@@ -190,5 +277,5 @@ class WhisperWriterApp(QObject):
 
 
 if __name__ == '__main__':
-    app = WhisperWriterApp()
+    app = AsklaionTyperApp()
     app.run()

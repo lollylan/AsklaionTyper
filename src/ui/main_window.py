@@ -16,7 +16,7 @@ class MainWindow(BaseWindow):
         """
         Initialize the main window.
         """
-        super().__init__('WhisperWriter', 320, 180)
+        super().__init__('AsklaionTyper', 320, 180)
         self.initMainUI()
 
     def initMainUI(self):
@@ -45,9 +45,11 @@ class MainWindow(BaseWindow):
 
     def closeEvent(self, event):
         """
-        Close the application when the main window is closed.
+        Hide the main window instead of closing — the app keeps running in
+        the system tray and can be quit via Tray menu > Exit.
         """
-        self.closeApp.emit()
+        event.ignore()
+        self.hide()
 
     def startPressed(self):
         """
