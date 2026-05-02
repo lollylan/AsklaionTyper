@@ -92,7 +92,7 @@ REM 4. Install server-only dependencies (fastapi, uvicorn, cryptography,
 REM    python-multipart) one-time
 REM ----------------------------------------------------------------------
 if not exist "%SERVER_STAMP%" (
-    echo Installiere Server-Pakete (fastapi, uvicorn, cryptography, python-multipart) ...
+    echo Installiere Server-Pakete ^(fastapi, uvicorn, cryptography, python-multipart^) ...
     "%VENV_PY%" -m pip install fastapi uvicorn cryptography python-multipart
     if errorlevel 1 (
         echo.
