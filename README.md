@@ -20,7 +20,8 @@ Dieser Fork ist auf den deutschen Workflow optimiert, insbesondere für medizini
 - **Deutsche Voreinstellungen:** `language: de`, `model: large-v3`, deutscher `initial_prompt` für korrekte Groß-/Kleinschreibung und Satzzeichen.
 - **Clipboard-Eingabemethode (`input_method: clipboard`):** Statt Zeichen-für-Zeichen über pynput wird der Text via Zwischenablage und `Strg+V` eingefügt. Das löst das bekannte Problem, dass Umlaute (`ä`, `ö`, `ü`, `ß`) und andere Nicht-ASCII-Zeichen auf Windows beim Per-Char-Typen fehlerhaft eingefügt werden.
 - **Robuster Modell-Start:** Automatisches Warmup nach dem Laden, plus Fallback auf CPU, falls die CUDA-Initialisierung fehlschlägt.
-- **`start.bat` für Windows:** Aktiviert das venv, setzt die CUDA-/cuDNN-Pfade aus dem venv in den `PATH` und startet die App mit einem Doppelklick.
+- **`start.bat` als One-Click-Bootstrap (Windows):** Findet eine passende Python-Installation, legt das venv automatisch an, installiert/aktualisiert alle Pakete aus `requirements.txt` (inkl. gebündelter NVIDIA-Libraries für CUDA), setzt die DLL-Pfade und startet die App. Auf einem frischen Rechner reicht Doppelklick.
+- **Self-Healing in `run.py`:** Vor dem Start wird zusätzlich geprüft, ob alle Python-Module verfügbar sind; fehlende Pakete werden automatisch nachinstalliert.
 
 Die ursprüngliche WhisperWriter-Funktionalität bleibt komplett erhalten — siehe Abschnitte unten.
 
@@ -37,46 +38,39 @@ Die Transkription erfolgt entweder lokal über [faster-whisper](https://github.c
 
 ### Voraussetzungen
 
-- [Git](https://git-scm.com/downloads)
-- [Python 3.11](https://www.python.org/downloads/)
-- Für GPU-Beschleunigung: NVIDIA-GPU mit [cuBLAS für CUDA 12](https://developer.nvidia.com/cublas) und [cuDNN 8 für CUDA 12](https://developer.nvidia.com/cudnn)
+- [Git](https://git-scm.com/downloads) (nur fürs Klonen)
+- [Python 3.11](https://www.python.org/downloads/release/python-3119/) — bei der Installation **„Add Python to PATH"** anhaken
+- Optional für GPU-Beschleunigung: NVIDIA-GPU; cuBLAS und cuDNN 8 werden als pip-Pakete (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`) automatisch mitinstalliert. Eine separate System-Installation ist nicht nötig.
 
-> **Hinweis zu cuDNN:** `nvidia-cudnn-cu12` ab Version 9 ist mit faster-whisper nicht kompatibel — bei cuDNN 8 bleiben.
-
-<details>
-<summary>Alternative cuDNN-Installation für Windows</summary>
-
-Statt der offiziellen NVIDIA-Pakete kannst du das vorgepackte Archiv von [Purfview/whisper-standalone-win](https://github.com/Purfview/whisper-standalone-win/releases/tag/libs) entpacken und den Ordner in den `PATH` aufnehmen. `start.bat` setzt zusätzlich die DLL-Pfade aus dem venv in den `PATH`, falls du `nvidia-cublas-cu12` und `nvidia-cudnn-cu12` per pip installierst.
-</details>
-
-### Installation
+### One-Click-Setup
 
 ```bash
 git clone https://github.com/lollylan/AsklaionTyper
 cd AsklaionTyper
-
-python -m venv venv
-venv\Scripts\activate
-
-pip install -r requirements.txt
 ```
 
-### Starten
+Dann **`start.bat` doppelklicken**. Beim ersten Start passiert automatisch:
 
-**Variante 1 — Doppelklick:**
+1. Eine passende Python-Installation wird gesucht (`py -3.11` bevorzugt).
+2. Ein virtuelles Environment wird unter `venv\` angelegt.
+3. Alle Pakete aus `requirements.txt` werden installiert (inkl. CUDA-Libraries — kann beim ersten Mal einige Minuten dauern).
+4. Die CUDA-DLL-Pfade werden in den `PATH` aufgenommen.
+5. Die App startet.
 
-```
-start.bat
-```
+Bei späteren Starts überspringt `start.bat` die Installation und startet sofort. Nur wenn sich `requirements.txt` geändert hat, wird neu installiert.
 
-**Variante 2 — manuell:**
+### Manueller Start (alternativ)
 
 ```bash
 venv\Scripts\activate
 python run.py
 ```
 
-Beim ersten Start öffnet sich das Settings-Fenster. Nach dem Speichern erscheint das Hauptfenster — `Start` klicken, dann mit `Strg + Shift + Leertaste` aufnehmen und transkribieren.
+`run.py` prüft beim Start zusätzlich, ob alle Python-Module verfügbar sind, und installiert fehlende automatisch nach.
+
+### Erste Schritte
+
+Beim ersten Lauf öffnet sich das Settings-Fenster. Nach dem Speichern erscheint das Hauptfenster — `Start` klicken, dann mit `Strg + Shift + Leertaste` aufnehmen und transkribieren.
 
 ## Konfiguration
 
