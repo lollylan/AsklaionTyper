@@ -1,6 +1,17 @@
 import yaml
 import os
 
+# When set, this environment variable overrides the default user-config path
+# (src/config.yaml). The network-client variant uses this to point at
+# client_config.yaml without conflicting with the all-in-one config.yaml.
+CONFIG_PATH_ENV = 'ASKLAIONTYPER_CONFIG'
+DEFAULT_USER_CONFIG = os.path.join('src', 'config.yaml')
+
+
+def _resolve_user_config_path():
+    return os.environ.get(CONFIG_PATH_ENV) or DEFAULT_USER_CONFIG
+
+
 class ConfigManager:
     _instance = None
 
@@ -94,7 +105,7 @@ class ConfigManager:
             config[category] = extract_value(settings)
         return config
 
-    def load_user_config(self, config_path=os.path.join('src', 'config.yaml')):
+    def load_user_config(self, config_path=None):
         """Load user configuration and merge with default config."""
         def deep_update(source, overrides):
             for key, value in overrides.items():
@@ -103,6 +114,8 @@ class ConfigManager:
                 else:
                     source[key] = value
 
+        if config_path is None:
+            config_path = _resolve_user_config_path()
         if config_path and os.path.isfile(config_path):
             try:
                 with open(config_path, 'r') as file:
@@ -112,10 +125,12 @@ class ConfigManager:
                 print("Error in configuration file. Using default configuration.")
 
     @classmethod
-    def save_config(cls, config_path=os.path.join('src', 'config.yaml')):
+    def save_config(cls, config_path=None):
         """Save the current configuration to a YAML file."""
         if cls._instance is None:
             raise RuntimeError("ConfigManager not initialized")
+        if config_path is None:
+            config_path = _resolve_user_config_path()
         with open(config_path, 'w') as file:
             yaml.dump(cls._instance.config, file, default_flow_style=False)
 
@@ -132,8 +147,7 @@ class ConfigManager:
     @classmethod
     def config_file_exists(cls):
         """Check if a valid config file exists."""
-        config_path = os.path.join('src', 'config.yaml')
-        return os.path.isfile(config_path)
+        return os.path.isfile(_resolve_user_config_path())
 
     @classmethod
     def console_print(cls, message):

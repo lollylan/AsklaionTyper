@@ -1,6 +1,7 @@
 import io
 import os
 import numpy as np
+import requests
 import soundfile as sf
 from faster_whisper import WhisperModel
 from openai import OpenAI
@@ -97,6 +98,66 @@ def transcribe_api(audio_data):
     )
     return response.text
 
+def transcribe_asklaion(audio_data):
+    """
+    Transcribe audio via the Asklaion whisper server (server_GPU_CUDA_Parallel.py).
+    Endpoint: POST {base_url}/transcribe, multipart/form-data with file=audio.wav,
+    HTTPS with self-signed CA pinned through model_options.api.ca_cert_path.
+    """
+    api = ConfigManager.get_config_section('model_options')['api']
+    base_url = (api.get('base_url') or '').rstrip('/')
+    if not base_url:
+        raise RuntimeError(
+            'Server-URL fehlt. Bitte unter Settings > Model options > '
+            'Base url die URL des Asklaion-Servers eintragen '
+            '(z. B. https://192.168.178.131:8000).'
+        )
+
+    sample_rate = ConfigManager.get_config_section('recording_options').get('sample_rate') or 16000
+    buffer = io.BytesIO()
+    sf.write(buffer, audio_data, sample_rate, format='WAV', subtype='PCM_16')
+    buffer.seek(0)
+
+    ca_cert_path = (api.get('ca_cert_path') or '').strip()
+    if ca_cert_path:
+        if not os.path.isfile(ca_cert_path):
+            raise RuntimeError(
+                f'CA-Zertifikat nicht gefunden: {ca_cert_path}\n'
+                f'Bitte certs/ca.crt vom Server kopieren und Pfad in den '
+                f'Settings korrigieren.'
+            )
+        verify = ca_cert_path
+    else:
+        verify = False
+        try:
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        except Exception:
+            pass
+        ConfigManager.console_print(
+            'WARNUNG: TLS-Verifizierung deaktiviert (kein ca_cert_path gesetzt).')
+
+    response = requests.post(
+        f'{base_url}/transcribe',
+        files={'file': ('audio.wav', buffer, 'audio/wav')},
+        timeout=60,
+        verify=verify,
+    )
+    response.raise_for_status()
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text.strip()
+
+    if isinstance(payload, dict):
+        if 'error' in payload:
+            raise RuntimeError(f'Server meldet Fehler: {payload["error"]}')
+        for key in ('text', 'transcription', 'transcript'):
+            if key in payload:
+                return str(payload[key])
+    return str(payload)
+
 def post_process_transcription(transcription):
     """
     Apply post-processing to the transcription.
@@ -114,13 +175,20 @@ def post_process_transcription(transcription):
 
 def transcribe(audio_data, local_model=None):
     """
-    Transcribe audio date using the OpenAI API or a local model, depending on config.
+    Transcribe audio data using one of three backends, depending on config:
+    - local faster-whisper (use_api: false)
+    - OpenAI-compatible API (use_api: true, api.provider: openai)
+    - Asklaion server (use_api: true, api.provider: asklaion)
     """
     if audio_data is None:
         return ''
 
     if ConfigManager.get_config_value('model_options', 'use_api'):
-        transcription = transcribe_api(audio_data)
+        provider = ConfigManager.get_config_value('model_options', 'api', 'provider') or 'openai'
+        if provider == 'asklaion':
+            transcription = transcribe_asklaion(audio_data)
+        else:
+            transcription = transcribe_api(audio_data)
     else:
         transcription = transcribe_local(audio_data, local_model)
 

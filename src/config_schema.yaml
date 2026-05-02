@@ -20,20 +20,31 @@ model_options:
       type: str
       description: "A string used as an initial prompt to condition the transcription. More info: https://platform.openai.com/docs/guides/speech-to-text/prompting"
 
-  # Configuration options for the OpenAI API
+  # Configuration options for the remote transcription API
   api:
+    provider:
+      value: openai
+      type: str
+      description: "Which remote API protocol to speak. 'openai' = OpenAI-compatible /v1/audio/transcriptions endpoint. 'asklaion' = Asklaion server_GPU_CUDA_Parallel.py /transcribe endpoint with CA-pinned HTTPS."
+      options:
+        - openai
+        - asklaion
     model:
       value: whisper-1
       type: str
-      description: "The model to use for transcription. Currently only 'whisper-1' is available."
+      description: "OpenAI provider only: model name to send to the API (e.g. 'whisper-1'). Ignored by the asklaion provider, which uses whatever model the server has loaded."
     base_url:
       value: https://api.openai.com/v1
       type: str
-      description: "The base URL for the API. Can be changed to use a local API endpoint."
+      description: "Base URL of the API. OpenAI default: https://api.openai.com/v1. Asklaion server typically: https://<lan-ip>:8000 (no /v1 suffix)."
     api_key:
       value: null
       type: str
-      description: "Your API key for the OpenAI API. Required for non-local API usage."
+      description: "Bearer token. Required for the openai provider (or compatible OpenAI-style servers). Ignored by the asklaion provider."
+    ca_cert_path:
+      value: ''
+      type: str
+      description: "Asklaion provider only: absolute path to the server's CA certificate (certs/ca.crt). Empty = TLS verification disabled (only safe in trusted LANs). Ignored by the openai provider."
 
   # Configuration options for the faster-whisper model
   local:
