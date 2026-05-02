@@ -3,7 +3,6 @@ import os
 import numpy as np
 import requests
 import soundfile as sf
-from faster_whisper import WhisperModel
 from openai import OpenAI
 
 from utils import ConfigManager
@@ -12,6 +11,9 @@ def create_local_model():
     """
     Create a local model using the faster-whisper library.
     """
+    # Lazy import: der Netzwerk-Client (start_client.bat) installiert das
+    # gpu-Extra nicht und braucht faster_whisper nie.
+    from faster_whisper import WhisperModel
     ConfigManager.console_print('Creating local model...')
     local_model_options = ConfigManager.get_config_section('model_options')['local']
     compute_type = local_model_options['compute_type']

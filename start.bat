@@ -1,106 +1,67 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 cd /d "%~dp0"
 
-set "VENV_DIR=%CD%\venv"
-set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
-set "REQ_FILE=%CD%\requirements.txt"
-set "STAMP=%VENV_DIR%\.requirements.stamp"
-
 REM ----------------------------------------------------------------------
-REM 1. Locate a usable Python interpreter (prefer 3.11, then any python)
+REM AsklaionTyper - All-in-One (lokale Whisper-Inferenz auf eigener GPU).
+REM
+REM Bootstrap-Strategie: kein vorinstalliertes Python noetig. uv (in Rust)
+REM wird per-User nach %USERPROFILE%\.local\bin installiert (kein Admin),
+REM laedt selbststaendig Python 3.11 herunter und legt das venv unter .venv\
+REM an. uv.lock garantiert deterministische, reproduzierbare Installs.
 REM ----------------------------------------------------------------------
-set "PYTHON_CMD="
 
-where py >nul 2>nul
-if not errorlevel 1 (
-    py -3.11 -c "import sys" >nul 2>nul
-    if not errorlevel 1 (
-        set "PYTHON_CMD=py -3.11"
-    )
-)
+set "UV_DIR=%USERPROFILE%\.local\bin"
+set "UV_EXE=%UV_DIR%\uv.exe"
 
-if not defined PYTHON_CMD (
-    where python >nul 2>nul
-    if not errorlevel 1 set "PYTHON_CMD=python"
-)
+call :find_uv
+if defined UV_CMD goto have_uv
 
-if not defined PYTHON_CMD (
-    where py >nul 2>nul
-    if not errorlevel 1 set "PYTHON_CMD=py"
-)
-
-if not defined PYTHON_CMD (
+echo.
+echo Installiere uv (Python-Toolchain, ohne Adminrechte) ...
+powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://astral.sh/uv/install.ps1 | iex"
+call :find_uv
+if not defined UV_CMD (
     echo.
-    echo [FEHLER] Es wurde keine Python-Installation gefunden.
-    echo Bitte Python 3.11 installieren: https://www.python.org/downloads/release/python-3119/
-    echo Bei der Installation "Add Python to PATH" anhaken.
+    echo [FEHLER] uv konnte nicht installiert werden.
+    echo Internet pruefen oder uv manuell installieren:
+    echo   https://docs.astral.sh/uv/getting-started/installation/
+    pause
+    exit /b 1
+)
+
+:have_uv
+echo Synchronisiere Abhaengigkeiten (All-in-One + GPU) ...
+"%UV_CMD%" sync --extra gpu
+if errorlevel 1 (
     echo.
+    echo [FEHLER] uv sync fehlgeschlagen.
     pause
     exit /b 1
 )
 
 REM ----------------------------------------------------------------------
-REM 2. Create virtual environment if it does not exist
+REM CUDA / cuDNN DLLs aus dem venv-PATH zugaenglich machen
 REM ----------------------------------------------------------------------
-if not exist "%VENV_PY%" (
-    echo Erstelle virtuelle Umgebung in "%VENV_DIR%" ...
-    %PYTHON_CMD% -m venv "%VENV_DIR%"
-    if errorlevel 1 (
-        echo.
-        echo [FEHLER] venv konnte nicht erstellt werden.
-        pause
-        exit /b 1
-    )
-    REM Force re-install on fresh venv
-    if exist "%STAMP%" del "%STAMP%"
-)
+set "VENV_LIB=%CD%\.venv\Lib\site-packages"
+if exist "%VENV_LIB%\nvidia\cublas\bin" set "PATH=%VENV_LIB%\nvidia\cublas\bin;%PATH%"
+if exist "%VENV_LIB%\nvidia\cudnn\bin"  set "PATH=%VENV_LIB%\nvidia\cudnn\bin;%PATH%"
 
 REM ----------------------------------------------------------------------
-REM 3. Install / update dependencies if requirements.txt changed
+REM AsklaionTyper starten
 REM ----------------------------------------------------------------------
-set "NEED_INSTALL=0"
-if not exist "%STAMP%" (
-    set "NEED_INSTALL=1"
-) else (
-    for %%R in ("%REQ_FILE%") do set "REQ_TIME=%%~tR"
-    for %%S in ("%STAMP%")    do set "STAMP_TIME=%%~tS"
-    if "!REQ_TIME!" GTR "!STAMP_TIME!" set "NEED_INSTALL=1"
-)
-
-if "!NEED_INSTALL!"=="1" (
-    echo Installiere/Aktualisiere Pakete aus requirements.txt ...
-    "%VENV_PY%" -m pip install --upgrade pip
-    "%VENV_PY%" -m pip install -r "%REQ_FILE%"
-    if errorlevel 1 (
-        echo.
-        echo [FEHLER] pip install fehlgeschlagen.
-        pause
-        exit /b 1
-    )
-    echo. > "%STAMP%"
-)
-
-REM ----------------------------------------------------------------------
-REM 4. Add bundled NVIDIA CUDA / cuDNN DLLs to PATH (if present)
-REM ----------------------------------------------------------------------
-if exist "%VENV_DIR%\Lib\site-packages\nvidia\cublas\bin" (
-    set "PATH=%VENV_DIR%\Lib\site-packages\nvidia\cublas\bin;!PATH!"
-)
-if exist "%VENV_DIR%\Lib\site-packages\nvidia\cudnn\bin" (
-    set "PATH=%VENV_DIR%\Lib\site-packages\nvidia\cudnn\bin;!PATH!"
-)
-
-REM ----------------------------------------------------------------------
-REM 5. Launch AsklaionTyper
-REM ----------------------------------------------------------------------
-"%VENV_PY%" run.py
+"%UV_CMD%" run python run.py
 set "EXITCODE=%ERRORLEVEL%"
-
 if not "%EXITCODE%"=="0" (
     echo.
     echo AsklaionTyper wurde mit Exit-Code %EXITCODE% beendet.
     pause
 )
-
 endlocal & exit /b %EXITCODE%
+
+REM ----------------------------------------------------------------------
+:find_uv
+set "UV_CMD="
+where uv >nul 2>nul && set "UV_CMD=uv"
+if not defined UV_CMD if exist "%UV_EXE%" set "UV_CMD=%UV_EXE%"
+goto :eof

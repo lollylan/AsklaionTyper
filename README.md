@@ -45,31 +45,31 @@ Das Programm basiert auf [WhisperWriter](https://github.com/savbell/whisper-writ
 
 ## Was muss ich vorher installieren?
 
-Du brauchst **drei** Dinge auf jedem Rechner, der AsklaionTyper nutzen soll:
+**Fast nichts.** Die Bootstrap-Skripte (`start.bat`, `start_client.bat`, `start_server.bat`) laden alles selbst — auch Python. Du brauchst nur:
 
-### 1. Python 3.11 (Pflicht)
+### 1. Git (oder ZIP-Download)
 
-[**Hier herunterladen → Python 3.11.9**](https://www.python.org/downloads/release/python-3119/)
+[**Git for Windows**](https://git-scm.com/download/win) — alle Voreinstellungen einfach durchklicken. Damit kannst du das Repo klonen und später per `git pull` updaten.
 
-Scrolle auf der Seite nach unten und wähle **„Windows installer (64-bit)"**.
+> Alternative ohne Git: oben rechts auf GitHub **„Code"** → **„Download ZIP"** und irgendwohin entpacken. Updates dann manuell.
 
-> ⚠️ **Wichtig beim Installieren:** Auf der ersten Seite des Installers das Häkchen **„Add Python to PATH"** anhaken (ganz unten). Sonst findet Windows Python später nicht.
+### 2. Nur für GPU-Betrieb: NVIDIA-Treiber
 
-Spätere Python-Versionen (3.12, 3.13) funktionieren oft auch, aber nicht alle Pakete sind dort schon getestet — bleib bei 3.11, dann gibt's am wenigsten Stress.
+Wenn du Whisper lokal auf der GPU laufen lässt (Variante A oder Server in Variante B), brauchst du eine **NVIDIA-Grafikkarte** und **aktuelle NVIDIA-Treiber** ([nvidia.com/drivers](https://www.nvidia.com/Download/index.aspx)).
 
-### 2. Git (für Klonen vom Repo)
+CUDA und cuDNN selbst musst du **nicht** als System-Installation einrichten — die richtigen Versionen werden als Python-Wheels in das venv installiert.
 
-[**Hier herunterladen → Git for Windows**](https://git-scm.com/download/win)
+### Was passiert beim ersten Start (automatisch)
 
-Während der Installation kannst du alle Voreinstellungen so lassen, wie sie sind, und einfach durchklicken.
+Beim ersten Doppelklick auf eine `.bat`:
 
-> Falls du kein Git installieren willst: Du kannst stattdessen oben rechts auf dieser GitHub-Seite auf **„Code"** → **„Download ZIP"** klicken und das ZIP irgendwo hin entpacken. Nachteil: keine automatischen Updates per `git pull`.
+1. **[uv](https://docs.astral.sh/uv/)** wird per-User nach `%USERPROFILE%\.local\bin` installiert (kein Admin nötig). Das ist der moderne Python-Paketmanager.
+2. **Python 3.11** wird von uv heruntergeladen und im User-Profil abgelegt — du musst Python *nicht selbst* installieren.
+3. Ein **virtuelles Environment** entsteht in `.venv\` neben dem Repo.
+4. Alle **Abhängigkeiten** werden aus `pyproject.toml` + `uv.lock` reproduzierbar installiert (deterministisch, hash-verifiziert).
+5. Die App startet.
 
-### 3. Nur falls du die GPU nutzen willst (Variante A oder Server in Variante B)
-
-Du brauchst eine **NVIDIA-Grafikkarte** und **aktuelle NVIDIA-Treiber** ([nvidia.com/drivers](https://www.nvidia.com/Download/index.aspx)).
-
-Die für Whisper benötigten CUDA- und cuDNN-Bibliotheken installiert das Skript automatisch in das Python-venv. Du musst CUDA **nicht** separat als System-Installation einrichten.
+Spätere Starts sind in Sekunden fertig.
 
 ---
 
@@ -93,13 +93,7 @@ Falls du die ZIP-Variante nutzt: ZIP entpacken und direkt zu Schritt 2 springen.
 
 Im Explorer in den Ordner `AsklaionTyper\` wechseln und auf **`start.bat`** doppelklicken.
 
-Beim **ersten Start** passiert das hier automatisch (kann 5-10 Minuten dauern):
-1. Eine passende Python-Installation wird gesucht.
-2. Ein virtuelles Environment wird in `venv\` angelegt.
-3. Alle Pakete werden installiert (inklusive CUDA-Bibliotheken — die sind groß).
-4. Die App startet.
-
-Bei späteren Starts geht das in Sekunden — Doppelklick und los.
+Beim **ersten Start** holt uv selbsttätig Python 3.11 + alle Pakete inkl. CUDA-Wheels (~2,5 GB, dauert 3-5 Minuten je nach Internet). Bei späteren Starts ist die App in Sekunden da — Doppelklick und los.
 
 ### Schritt 3 — Erste Konfiguration
 
@@ -150,12 +144,11 @@ cd AsklaionTyper
 
 Doppelklick auf **`start_server.bat`**. Beim ersten Start:
 
-1. Python-venv wird angelegt.
-2. Server-Pakete werden installiert (`fastapi`, `uvicorn`, `cryptography`, `python-multipart`).
-3. CUDA-Bibliotheken werden eingerichtet.
-4. Ein selbstsigniertes TLS-Zertifikat wird in `certs\` erzeugt (CA + Server-Cert für die aktuelle LAN-IP).
-5. Whisper `large-v3` wird in den GPU-VRAM geladen (~3 GB, 20-60 Sek.).
-6. Der Server lauscht auf `https://<deine-LAN-IP>:8000`.
+1. uv + Python 3.11 werden eingerichtet (siehe oben).
+2. Pakete für Server- und GPU-Modus werden installiert (`fastapi`, `uvicorn`, `faster-whisper`, CUDA-Wheels usw.).
+3. Ein selbstsigniertes TLS-Zertifikat wird in `certs\` erzeugt (CA + Server-Cert für die aktuelle LAN-IP).
+4. Whisper `large-v3` wird in den GPU-VRAM geladen (~3 GB, 20-60 Sek.).
+5. Der Server lauscht auf `https://<deine-LAN-IP>:8000`.
 
 Im Konsolenfenster siehst du am Ende:
 
@@ -196,8 +189,8 @@ cd AsklaionTyper
 
 Doppelklick auf **`start_client.bat`**. Beim ersten Start:
 
-1. Python-venv wird angelegt.
-2. Pakete werden installiert (deutlich weniger als beim Server, ~1 Minute).
+1. uv + Python 3.11 werden eingerichtet (siehe oben).
+2. Nur die schlanken Client-Pakete werden installiert (~250 MB, kein CUDA — die GPU-Arbeit macht der Server).
 3. Die App startet — gleiche GUI wie All-in-One.
 
 #### Schritt 2.3 — Server-Zugang konfigurieren
@@ -276,7 +269,10 @@ Das vollständige Schema mit allen verfügbaren Optionen und ihren Defaults find
 ### Allgemein
 
 **„Beim Doppelklick auf `start.bat` schließt sich das Konsolenfenster sofort"**
-Wahrscheinlich kein Python in PATH. Re-Installieren mit Häkchen **„Add Python to PATH"**.
+Meist scheitert die uv-Installation am Internet/Proxy. uv manuell holen: PowerShell öffnen und `irm https://astral.sh/uv/install.ps1 | iex` ausführen, danach `start.bat` erneut. Alternative: uv von [docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/) als ZIP herunterladen und nach `%USERPROFILE%\.local\bin\` entpacken.
+
+**„uv sync schlägt mit `Cannot install ...` fehl"**
+Internetverbindung / Proxy prüfen. Falls hinter Firewall: `pip.ini` / `uv.toml` mit `index-url` auf den internen PyPI-Mirror eintragen.
 
 **„Umlaute (ä, ö, ü, ß) werden falsch eingefügt"**
 Settings → Post processing → `input_method: clipboard` (Standard in diesem Fork).
@@ -330,12 +326,13 @@ Damit kannst du den All-in-One-Modus jederzeit auch gegen einen externen OpenAI-
 AsklaionTyper\
 ├── run.py                       # All-in-One-Einstieg
 ├── client.py                    # Netzwerk-Client-Einstieg (Wrapper)
-├── start.bat                    # Bootstrap All-in-One
-├── start_client.bat             # Bootstrap Client
-├── start_server.bat             # Bootstrap Server
+├── start.bat                    # Bootstrap All-in-One (uv sync --extra gpu)
+├── start_client.bat             # Bootstrap Netzwerk-Client (uv sync, schlank)
+├── start_server.bat             # Bootstrap Server (uv sync --extra gpu --extra server)
 ├── server_GPU_CUDA_Parallel.py  # Whisper-HTTPS-Server (FastAPI)
 ├── security_utils.py            # TLS-Cert-Helper für den Server
-├── requirements.txt             # Geteilte Python-Abhängigkeiten
+├── pyproject.toml               # Manifest (Basis + Extras: gpu, server, dev)
+├── uv.lock                      # Reproduzierbare, hash-gepinnte Aufloesung
 ├── certs\                       # vom Server bei Start erzeugt (gitignored, enthält private Keys!)
 ├── src\
 │   ├── main.py                  # Qt-App (Tray, Hauptfenster)

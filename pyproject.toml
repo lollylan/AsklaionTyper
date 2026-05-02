@@ -1,0 +1,60 @@
+[project]
+name = "asklaiontyper"
+version = "1.1.0"
+description = "Diktier-App fuer Windows mit lokalem oder Server-basiertem Whisper."
+requires-python = ">=3.11,<3.13"
+
+# Basis: was JEDE Variante (Client, All-in-One, Server) braucht.
+# Versionen sind als Mindestwerte gepinnt; die exakte Aufloesung steht
+# reproduzierbar in uv.lock und wird per "uv lock --upgrade" gepflegt.
+dependencies = [
+    # GUI / Hotkey / IO
+    "PyQt5>=5.15.10",
+    # PyQt5-Qt5 ist eine Transitive von PyQt5. Auf Windows existiert kein
+    # Wheel >5.15.2 mehr; die Linux/macOS-Releases (5.15.18+) wuerden den
+    # Resolver unter Windows brechen. Hart auf 5.15.2 pinnen.
+    "PyQt5-Qt5==5.15.2; sys_platform == 'win32'",
+    "pynput>=1.7.7",
+    "pyperclip>=1.9",
+    "PyYAML>=6.0.2",
+    "python-dotenv>=1.0.1",
+    "audioplayer>=0.6",
+
+    # Audioaufnahme + VAD
+    "sounddevice>=0.5",
+    "soundfile>=0.12.1",
+    "numpy>=1.26,<2.0",        # faster-whisper / ctranslate2 sind noch nicht numpy-2-fest
+    "webrtcvad-wheels>=2.0.11",
+
+    # Netzwerk-Transkription (OpenAI-API + Asklaion-Server)
+    "openai>=1.50",
+    "requests>=2.32.3",        # CVE-2024-35195 fix
+]
+
+[project.optional-dependencies]
+# Lokale Whisper-Inferenz (All-in-One + Server). Auf Clients NICHT installieren.
+gpu = [
+    "faster-whisper>=1.0.3,<2.0",
+    "ctranslate2>=4.4,<4.5",   # CT2 4.4 = letzte Reihe, die mit cuDNN 8 laeuft
+    "nvidia-cublas-cu12; sys_platform == 'win32'",
+    "nvidia-cudnn-cu12==8.9.7.29; sys_platform == 'win32'",
+]
+
+# HTTPS-Server (server_GPU_CUDA_Parallel.py)
+server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    "cryptography>=43",
+]
+
+# Build- / Entwickler-Werkzeuge (PyInstaller, Linter, Tests)
+dev = [
+    "pyinstaller>=6.11",
+    "ruff>=0.7",
+    "pytest>=8",
+]
+
+[tool.uv]
+# Anwendung (kein Wheel-Build), uv verwaltet nur die Abhaengigkeiten.
+package = false
