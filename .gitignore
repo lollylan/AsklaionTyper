@@ -132,5 +132,9 @@ dmypy.json
 config.yaml
 client_config.yaml
 
+# TLS material generated at server startup. NEVER commit -- contains
+# private keys (ca.key, server.key). Each install regenerates its own.
+certs/
+
 # Claude Code local settings
 .claude/settings.local.json
